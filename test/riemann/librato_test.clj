@@ -4,7 +4,8 @@
         clj-librato.metrics
         clojure.math.numeric-tower
         clojure.test)
-  (:require [riemann.logging :as logging]))
+  (:require [riemann.logging :as logging]
+            [riemann.service :as service]))
 
 (def user   (System/getenv "LIBRATO_METRICS_USER"))
 (def api-key (System/getenv "LIBRATO_METRICS_API_KEY"))
@@ -31,10 +32,12 @@
 (deftest ^:librato ^:integration librato-metrics-test
          (let [l (librato-metrics user api-key)
                http-options (:riemann.librato/http-options l)]
+           (service/start! l)
            (testing "gauge with source"
                     (let [e {:host "a" :service "b" :metric (rand)
                              :time (unix-time)}
                           r ((:gauge l) e)
+                          _ (Thread/sleep 1000)
                           m (get-metric (event->gauge e) http-options)]
                       (is m)
                       (is (= (:metric e) (:value m)))
@@ -46,6 +49,7 @@
                           e1 {:host "c" :service "d" :metric (rand)
                              :time (unix-time)}
                           r ((:gauge l) [e0 e1])]
+                      (Thread/sleep 1000)
                       (for [event [e0 e1]
                             :let [m (get-metric (event->gauge event)
                                                 http-options)]]
@@ -58,6 +62,7 @@
                     (let [e {:service "sourceless" :metric (rand)
                              :time (unix-time)}
                           r ((:gauge l) e)
+                          _ (Thread/sleep 1000)
                           m (get-metric (event->gauge e) http-options)]
                       (is m)
                       (is (= (:metric e) (:value m)))
@@ -67,6 +72,7 @@
                     (let [e {:host "p" :service "q" :metric (rand-int 2048)
                              :time (unix-time)}
                           r ((:counter l) e)
+                          _ (Thread/sleep 1000)
                           m (get-metric (event->counter e) http-options)]
                       (is m)
                       (is (= (:metric e) (:value m)))
@@ -76,8 +82,9 @@
                     (let [e0 {:host "p" :service "q" :metric (rand-int 2048)
                              :time (unix-time)}
                           e1 {:host "x" :service "y" :metric (rand-int 2048)
-                             :time (unix-time)}
+                              :time (unix-time)}
                           r ((:counter l) [e0 e1])]
+                      (Thread/sleep 1000)
                       (for [event [e0 e1]
                             :let [m (get-metric (event->counter event)
                                                 http-options)]]
@@ -137,4 +144,5 @@
                       (is (= "flaky") (:source a))
                       (is (= "something bad happened" (:description a)))
                       (is (= (:time e) (:start-time a)))
-                      (is (= (+ 5 (:time e)) (:end-time a)))))))
+                      (is (= (+ 5 (:time e)) (:end-time a)))))
+           (service/stop! l)))
